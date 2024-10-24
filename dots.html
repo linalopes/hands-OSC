@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dots on Hands</title>
+    <link rel="icon" type="image/x-icon" href="favicon.png">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/addons/p5.dom.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/addons/p5.sound.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ml5@latest/dist/ml5.min.js"></script>
+</head>
+
+<body>
+    <script>
+        let handPose;
+        let video;
+        let hands = [];
+
+        function preload() {
+            // Load the handpose model
+            handPose = ml5.handPose({ flipHorizontal: true });
+        }
+
+        function setup() {
+            createCanvas(640, 480);
+
+            // Create a video capture from the webcam and hide it
+            video = createCapture(VIDEO);
+            video.size(640, 480);
+            video.hide();
+
+            // Start the detection of hands from  the webcam
+            handPose.detectStart(video, gotHands);
+
+        }
+
+        // Callback function when hands are detected
+        function gotHands(results) {
+            // Save the results in the hands array
+            hands = results;
+        }
+
+        function draw() {
+            // Mirror the video horizontally
+            push(); // Save the current state of the drawing
+            translate(width, 0); // Move the origin to the right edge of the canvas
+            scale(-1, 1); // Invert the x-axis
+            image(video, 0, 0, width, height); // Draw the video
+            pop(); // Restore the previous state of the drawing
+
+            // Draw all the tracked hand points
+            for (let i = 0; i < hands.length; i++) {
+                let hand = hands[i];
+
+                for (let j = 0; j < hand.keypoints.length; j++) {
+                    let keypoint = hand.keypoints[j];
+
+                    if (hand.annotations === "index_finger_tip") {
+                        fill (255);
+                        circle(keypoint.x, keypoint.y, 10);
+                    } else {
+                        fill(234, 125, 255, 200);
+                        noStroke();
+                        circle(keypoint.x, keypoint.y, 10);
+                    }
+                }
+            }
+        }
+
+        
+    </script>
+</body>
+
+</html>

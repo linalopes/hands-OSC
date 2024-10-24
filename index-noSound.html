@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BodyPose Particle Clouds</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/addons/p5.dom.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ml5@latest/dist/ml5.min.js"></script>
+</head>
+
+<body>
+    <script>
+        let handPose;
+        let video;
+        let hands = [];
+        let particles = [];
+        let socket;
+
+        // Conectar ao WebSocket server rodando no seu computador
+        function setupWebSocket() {
+            socket = new WebSocket("ws://localhost:8081"); // Conexão com o servidor WebSocket
+
+            socket.onopen = function (event) {
+                console.log("WebSocket connection established");
+            };
+
+            socket.onmessage = function (event) {
+                console.log("Message from server: " + event.data);
+            };
+
+            socket.onerror = function (error) {
+                console.error("WebSocket error: " + error);
+            };
+
+            socket.onclose = function (event) {
+                console.log("WebSocket connection closed");
+            };
+        }
+
+        function preload() {
+            // Carregar o modelo handPose e passar flipHorizontal como true
+            handPose = ml5.handPose({ flipHorizontal: true });
+        }
+
+        function setup() {
+            createCanvas(640, 480);
+
+            // Criar o vídeo e escondê-lo
+            video = createCapture(VIDEO);
+            video.size(640, 480);
+            video.hide();
+
+            // Iniciar a detecção de mãos a partir do vídeo da webcam
+            handPose.detectStart(video, gotHands);
+
+            // Configurar a conexão WebSocket
+            setupWebSocket();
+        }
+
+        // Função de callback para quando o modelo handPose detectar mãos
+        function gotHands(results) {
+            // Salvar a saída no array hands
+            hands = results;
+        }
+
+        function draw() {
+            // Espelhar o vídeo horizontalmente
+            push(); // Salvar o estado atual do desenho
+            translate(width, 0); // Mover a origem para a direita
+            scale(-1, 1); // Inverter o eixo X para espelhamento
+            image(video, 0, 0, width, height); // Desenhar o vídeo espelhado
+            pop(); // Restaurar o estado original do desenho
+
+            // Desenhar partículas na ponta do dedo indicador
+            for (let i = 0; i < hands.length; i++) {
+                let hand = hands[i];
+                // Desenhar todas as partículas
+                drawParticles();
+
+                // Detectar mão esquerda
+                if (hand.handedness === "Left") {
+                    fill(8, 242, 219, 200);
+                    textSize(32);
+                    text('LEFT', 50, 50);
+                    updateParticles(hand.index_finger_tip.x, hand.index_finger_tip.y);
+
+                    // Enviar mensagem OSC via WebSocket quando a mão direita for detectada
+                    sendOSCMessageRight(0);  // Envia o valor 180
+                }
+                // Detectar mão direita
+                else if (hand.handedness === "Right") {
+                    fill(234, 125, 255, 200);
+                    textSize(32);
+                    text('RIGHT', width - 150, 50);
+                    updateParticles(hand.index_finger_tip.x, hand.index_finger_tip.y);
+
+                    // Enviar mensagem OSC via WebSocket quando a mão direita for detectada
+                    sendOSCMessageRight(180);  // Envia o valor 180
+                }
+            }
+        }
+
+        // Função para enviar a mensagem OSC ao servidor WebSocket
+        function sendOSCMessageRight(value) {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(value);  // Enviar o valor (ex: 180)
+                console.log("OSC Message Sent: /right " + value);
+            } else {
+                console.error("WebSocket is not open. Cannot send OSC message.");
+            }
+        }
+
+        // Função para criar e atualizar partículas
+        function updateParticles(x, y) {
+            particles.push(new Particle(x, y));
+            // Limitar o número de partículas para performance
+            if (particles.length > 100) {
+                particles.splice(0, 1);
+            }
+        }
+
+        // Função para desenhar partículas
+        function drawParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].show();
+                if (particles[i].finished()) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        // Classe Particle
+        class Particle {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.vx = random(-1, 1);
+                this.vy = random(-1, 1);
+                this.alpha = 255;
+            }
+
+            finished() {
+                return this.alpha < 0;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.alpha -= 5;
+            }
+
+            show() {
+                noStroke();
+                ellipse(this.x, this.y, 10);
+            }
+        }
+    </script>
+</body>
+
+</html>

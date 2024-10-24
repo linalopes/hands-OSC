@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pupettry the servo</title>
+    <link rel="icon" type="image/x-icon" href="favicon.png">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/addons/p5.dom.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/addons/p5.sound.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ml5@latest/dist/ml5.min.js"></script>
+</head>
+
+<body>
+    <script>
+        let handPose;
+        let video;
+        let hands = [];
+        let particles = [];
+        let colorParticle;
+        let socket;
+        let oscil; // Oscillator for sound
+
+        // Connect to WebSocket server in the door 8081
+        function setupWebSocket() {
+            socket = new WebSocket("ws://localhost:8081");
+
+            socket.onopen = function (event) {
+                console.log("WebSocket connection established");
+            };
+
+            socket.onmessage = function (event) {
+                console.log("Message from server: " + event.data);
+            };
+
+            socket.onerror = function (error) {
+                console.error("WebSocket error: " + error);
+            };
+
+            socket.onclose = function (event) {
+                console.log("WebSocket connection closed");
+            };
+        }
+
+        function preload() {
+            // Load the handpose model
+            handPose = ml5.handPose({ flipHorizontal: true });
+        }
+
+        function setup() {
+            createCanvas(640, 480);
+
+            // Create a video capture from the webcam and hide it
+            video = createCapture(VIDEO);
+            video.size(640, 480);
+            video.hide();
+
+            // Create an oscillator for sound
+            oscil = new p5.Oscillator('sine');  // Sine wave oscillator
+            oscil.start();
+            oscil.amp(0.5);  // Set amplitude
+
+            // Start the deteection of hands from  the webcam
+            handPose.detectStart(video, gotHands);
+
+            // Setup the WebSocket connection
+            setupWebSocket();
+        }
+
+        // Callback function when hands are detected
+        function gotHands(results) {
+            // Save the results in the hands array
+            hands = results;
+        }
+
+        function draw() {
+            // Mirror the video horizontally
+            push(); // Save the current state of the drawing
+            translate(width, 0); // Move the origin to the right edge of the canvas
+            scale(-1, 1); // Invert the x-axis
+            image(video, 0, 0, width, height); // Draw the video
+            pop(); // Restore the previous state of the drawing
+
+            // Draw particles on the tip of the index finger
+            for (let i = 0; i < hands.length; i++) {
+                let hand = hands[i];
+                // Draw all particles
+                drawParticles();
+
+                // Detect the left hand
+                if (hand.handedness === "Left") {
+                    //fill(8, 242, 219, 200);
+                    colorParticle = color(8, 242, 219, 200);
+                    textSize(32);
+                    text('LEFT', 50, 50);
+                    updateParticles(hand.index_finger_tip.x, hand.index_finger_tip.y);
+
+                    // Send OSC message when the left hand is detected
+                    sendOSCMessageRight(0);  // Send the value 0 to the server
+
+                    // Mapear a posição da mão para controlar a frequência do som
+                    let freq = map(hand.index_finger_tip.x, 0, width, 100, 500);  // Frequency range: 100 to 500 Hz
+                    oscil.freq(freq);  // Control the frequency of the oscillator
+                }
+                // Detect the right hand
+                else if (hand.handedness === "Right") {
+                    //fill(234, 125, 255, 200);
+                    colorParticle = color(234, 125, 255, 200);
+                    textSize(32);
+                    text('RIGHT', width - 150, 50);
+                    updateParticles(hand.index_finger_tip.x, hand.index_finger_tip.y);
+
+                    // Send OSC message when the right hand is detected
+                    sendOSCMessageRight(180);  // Send the value 180 to the server
+                }
+            }
+        }
+
+        // Send the OSC message to the server
+        function sendOSCMessageRight(value) {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(value);  // Send the value to the server
+                console.log("OSC Message Sent: /right " + value);
+            } else {
+                console.error("WebSocket is not open. Cannot send OSC message.");
+            }
+        }
+
+        // Create and update particles
+        function updateParticles(x, y) {
+            particles.push(new Particle(x, y));
+            // Limit the number of particles to better performance
+            if (particles.length > 100) {
+                particles.splice(0, 1);
+            }
+        }
+
+        // Draw particles
+        function drawParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].show();
+                if (particles[i].finished()) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        // Particle Class
+        class Particle {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.vx = random(-1, 1);
+                this.vy = random(-1, 1);
+                this.alpha = 255;
+            }
+
+            finished() {
+                return this.alpha < 0;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.alpha -= 5;
+            }
+
+            show() {
+                noStroke();
+                fill(colorParticle);
+                ellipse(this.x, this.y, 10);
+            }
+        }
+    </script>
+</body>
+
+</html>

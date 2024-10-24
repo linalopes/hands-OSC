@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BodyPose Particle Clouds</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/addons/p5.dom.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ml5@latest/dist/ml5.min.js"></script>
+</head>
+
+<body>
+    <script>
+        let bodyPose;
+        let video;
+        let poses = [];
+        let connections;
+
+        function preload() {
+            // Load the bodyPose model
+            bodyPose = ml5.bodyPose();
+        }
+
+
+        function setup() {
+            createCanvas(640, 480);
+            video = createCapture(VIDEO);
+            video.size(width, height);
+            video.hide();
+
+            // Start detecting poses in the webcam video
+            bodyPose.detectStart(video, gotPoses);
+
+            // Get the skeleton connection information
+            connections = bodyPose.getSkeleton();
+
+        }
+
+        // Callback function for when the model returns pose data
+        function gotPoses(results) {
+            // Store the model's results in a global variable
+            poses = results;
+        }
+
+
+        function modelReady() {
+            console.log('Model Loaded!');
+        }
+
+        function drawWristCircles() {
+            for (let i = 0; i < poses.length; i++) {
+                let pose = poses[i];
+
+                // Verifica o "leftWrist"
+                let leftWrist = pose.keypoints.find(point => point.part === "leftWrist");
+                if (leftWrist && leftWrist.score > 0.1) {
+                    fill('#08F2DB'); // cor turquesa
+                    noStroke();
+                    ellipse(leftWrist.position.x, leftWrist.position.y, 20); // desenha o círculo
+                }
+
+                // Verifica o "rightWrist"
+                let rightWrist = pose.keypoints.find(point => point.part === "rightWrist");
+                if (rightWrist && rightWrist.score > 0.1) {
+                    fill('#EA7DFF'); // cor rosa
+                    noStroke();
+                    ellipse(rightWrist.position.x, rightWrist.position.y, 20); // desenha o círculo
+                }
+            }
+        }
+        function draw() {
+            image(video, 0, 0, width, height);
+
+            // Draw the skeleton connections
+            for (let i = 0; i < poses.length; i++) {
+                let pose = poses[i];
+                for (let j = 0; j < connections.length; j++) {
+                    let pointAIndex = connections[j][0];
+                    let pointBIndex = connections[j][1];
+                    let pointA = pose.keypoints[pointAIndex];
+                    let pointB = pose.keypoints[pointBIndex];
+                    // Only draw a line if we have confidence in both points
+                    if (pointA.confidence > 0.1 && pointB.confidence > 0.1) {
+                        stroke(255, 0, 0);
+                        strokeWeight(2);
+                        line(pointA.x, pointA.y, pointB.x, pointB.y);
+                    }
+                }
+            }
+            // Chama a função que desenha os círculos nos pulsos
+            drawWristCircles();
+        }
+
+
+    </script>
+</body>
+
+</html>
